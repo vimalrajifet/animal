@@ -52,6 +52,30 @@ def load_classes():
     return []
 
 
+TFLITE_INTERP = None
+
+def get_tflite_interpreter():
+    global TFLITE_INTERP
+    if TFLITE_INTERP is not None:
+        return TFLITE_INTERP
+    tflite_path = os.path.join(os.path.dirname(__file__), "animal_model.tflite")
+    if os.path.exists(tflite_path):
+        try:
+            try:
+                import tflite_runtime.interpreter as tflite
+                interp = tflite.Interpreter(model_path=tflite_path)
+            except ImportError:
+                import tensorflow as tf
+                interp = tf.lite.Interpreter(model_path=tflite_path)
+            interp.allocate_tensors()
+            TFLITE_INTERP = interp
+            print(f"✅ Loaded high-speed lightweight TFLite model from {tflite_path}")
+            return TFLITE_INTERP
+        except Exception as e:
+            print(f"⚠️ TFLite init error, falling back to Keras: {e}")
+    return None
+
+
 def get_model():
     global MODEL
     if MODEL is None:
@@ -79,21 +103,32 @@ def startup_event():
     global CLASSES
     CLASSES = load_classes()
     try:
-        get_model()
-        print("✅ Animal model loaded successfully on startup.")
+        if get_tflite_interpreter() is not None:
+            print("✅ Ready with TFLite model.")
+        else:
+            get_model()
+            print("✅ Animal model loaded successfully on startup.")
     except Exception as e:
         print(f"⚠️ Model load deferred or error: {e}")
 
 
 async def process_prediction(upload_file: UploadFile):
-    model = get_model()
     contents = await upload_file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     resized = image.resize((300, 300))
     img_array = np.array(resized, dtype=np.float32)
     img_batch = np.expand_dims(img_array, axis=0)
 
-    predictions = model.predict(img_batch, verbose=0)[0]
+    tfl_interp = get_tflite_interpreter()
+    if tfl_interp is not None:
+        in_det = tfl_interp.get_input_details()
+        out_det = tfl_interp.get_output_details()
+        tfl_interp.set_tensor(in_det[0]['index'], img_batch)
+        tfl_interp.invoke()
+        predictions = tfl_interp.get_tensor(out_det[0]['index'])[0]
+    else:
+        model = get_model()
+        predictions = model.predict(img_batch, verbose=0)[0]
     best_idx = int(np.argmax(predictions))
     best_animal = CLASSES[best_idx]
     best_confidence = float(predictions[best_idx] * 100)

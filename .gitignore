@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Large dataset images (5,400 images)
+archive/animals/
+
+# Duplicate model weight copies (keep best_animal_model.keras)
+animal_model.keras
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments & temporary files
+venv/
+env/
+.env/
+*.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

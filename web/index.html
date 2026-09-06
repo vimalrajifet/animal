@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animal Vision AI — Image Classifier & Voice Encyclopedia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="bg-glow"></div>
+
+    <header class="app-header">
+        <div class="header-container">
+            <div class="logo">
+                <span class="logo-icon">🐾</span>
+                <div>
+                    <h1 class="logo-title">Animal Vision AI</h1>
+                    <p class="logo-subtitle">EfficientNetB3 Image Classification & Voice Encyclopedia</p>
+                </div>
+            </div>
+            <div class="audio-toggle-wrap">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="autoSpeakToggle" checked>
+                    <span class="slider"></span>
+                </label>
+                <span class="toggle-label">Auto-Speak Facts 🗣️</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Upload & Input Column -->
+        <section class="card upload-card">
+            <h2 class="section-title">📷 Upload Animal Photo</h2>
+            <p class="section-desc">Drop an image here or click to browse. The AI will detect the species and speak about it.</p>
+
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileInput" accept="image/*" class="file-input">
+                <div class="drop-content" id="dropPrompt">
+                    <div class="upload-icon">📁</div>
+                    <p class="drop-main-text">Drag & drop your animal image here</p>
+                    <p class="drop-sub-text">or <span class="browse-link">browse files</span> (JPG, PNG, WEBP)</p>
+                </div>
+                <div class="preview-wrap hidden" id="previewWrap">
+                    <img id="imagePreview" alt="Uploaded Animal">
+                    <button class="remove-btn" id="removeBtn" title="Choose another image">✕ Change Image</button>
+                </div>
+            </div>
+
+            <div class="status-bar hidden" id="loadingStatus">
+                <div class="spinner"></div>
+                <span id="statusMessage">Analyzing image features with EfficientNetB3...</span>
+            </div>
+        </section>
+
+        <!-- Prediction & Voice Encyclopedia Section -->
+        <section class="card results-card hidden" id="resultsCard">
+            <!-- Top Prediction Hero -->
+            <div class="hero-prediction">
+                <div class="hero-header">
+                    <div class="tier-badge" id="tierBadge">High Confidence</div>
+                    <div class="confidence-score" id="confScore">96.84%</div>
+                </div>
+                <div class="animal-hero-title">
+                    <span class="animal-emoji" id="animalEmoji">🦁</span>
+                    <h2 id="animalName">Lion</h2>
+                </div>
+                <p class="tier-message" id="tierMessage">High confidence: This animal is most likely a Lion.</p>
+
+                <!-- Voice Narrator Player -->
+                <div class="voice-player">
+                    <button class="speak-btn" id="speakBtn">
+                        <span class="btn-icon">🔊</span>
+                        <span id="speakBtnText">Say About This Animal</span>
+                    </button>
+                    <button class="stop-btn" id="stopBtn" title="Stop speaking">⏹️ Stop</button>
+                    
+                    <div class="sound-wave hidden" id="soundWave">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+
+                    <div class="voice-status" id="voiceStatus">
+                        <span class="status-dot"></span> Ready to Speak
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 5 Predictions -->
+            <div class="top5-section">
+                <h3 class="subsection-title">📊 Top 5 Predictions</h3>
+                <div class="top5-list" id="top5List">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Detailed Wildlife Profile & Facts -->
+            <div class="encyclopedia-section">
+                <h3 class="subsection-title">📖 About This Animal</h3>
+                <p class="overview-text" id="animalOverview"></p>
+
+                <div class="profile-grid">
+                    <div class="profile-item">
+                        <span class="profile-icon">🔬</span>
+                        <div>
+                            <span class="profile-label">Scientific Name</span>
+                            <span class="profile-value" id="specSciName">Panthera leo</span>
+                        </div>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-icon">🥩</span>
+                        <div>
+                            <span class="profile-label">Diet</span>
+                            <span class="profile-value" id="specDiet">Carnivore</span>
+                        </div>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-icon">🌍</span>
+                        <div>
+                            <span class="profile-label">Habitat</span>
+                            <span class="profile-value" id="specHabitat">Savannahs and grasslands</span>
+                        </div>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-icon">🛡️</span>
+                        <div>
+                            <span class="profile-label">Conservation Status</span>
+                            <span class="profile-value" id="specStatus">Vulnerable</span>
+                        </div>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-icon">⏳</span>
+                        <div>
+                            <span class="profile-label">Lifespan</span>
+                            <span class="profile-value" id="specLifespan">10 - 15 years</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fun-fact-card">
+                    <div class="fun-fact-header">
+                        <span>💡</span>
+                        <strong>Fascinating Fact</strong>
+                    </div>
+                    <p id="funFactText"></p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>Trained on 90 wildlife categories • EfficientNetB3 Backbone • Real-time Web Speech Synthesis</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

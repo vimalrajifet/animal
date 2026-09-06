@@ -117,33 +117,34 @@ function handleImageFile(file) {
     uploadAndPredict(file);
 }
 
-const DEFAULT_CLOUD_BACKEND = '';
+let ortSession = null;
+let classesCache = null;
+let animalInfoCache = null;
 
-function getApiEndpoint() {
-    let custom = localStorage.getItem('animal_backend_url');
-    // If on HTTPS (e.g. Vercel), automatically clear stale dead tunnels or localhost
-    if (window.location.protocol === 'https:' && custom && (custom.startsWith('http://') || custom.includes('trycloudflare.com') || custom.includes('loca.lt'))) {
-        localStorage.removeItem('animal_backend_url');
-        custom = null;
+async function loadStaticData() {
+    if (!classesCache) {
+        try {
+            const res = await fetch('classes.json');
+            classesCache = await res.json();
+        } catch (e) {
+            console.warn("Could not load classes.json", e);
+        }
     }
-
-    if (custom) return custom.replace(/\/+$/, '') + '/predict';
-
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return '/predict';
+    if (!animalInfoCache) {
+        try {
+            const res = await fetch('animal_data.json');
+            animalInfoCache = await res.json();
+        } catch (e) {
+            console.warn("Could not load animal_data.json", e);
+        }
     }
-    return '';
 }
+loadStaticData();
 
 function updateApiIndicator() {
     const indicator = document.getElementById('apiIndicatorText');
     if (indicator) {
-        let custom = localStorage.getItem('animal_backend_url');
-        if (window.location.protocol === 'https:' && custom && (custom.startsWith('http://') || custom.includes('trycloudflare.com') || custom.includes('loca.lt'))) {
-            localStorage.removeItem('animal_backend_url');
-            custom = null;
-        }
-
+        const custom = localStorage.getItem('animal_backend_url');
         if (custom) {
             try {
                 const url = new URL(custom);
@@ -151,10 +152,8 @@ function updateApiIndicator() {
             } catch (e) {
                 indicator.textContent = `Backend: ${custom}`;
             }
-        } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            indicator.textContent = 'Backend: localhost:8000';
         } else {
-            indicator.textContent = '⚙️ Set Backend URL';
+            indicator.textContent = '🧠 AI: In-Browser (Free & Offline)';
         }
     }
 }
@@ -164,17 +163,125 @@ if (apiConfigBtn) {
     apiConfigBtn.addEventListener('click', () => {
         const current = localStorage.getItem('animal_backend_url') || '';
         const newUrl = prompt(
-            "Configure FastAPI Backend URL:\n\nPaste your Render URL here:\n(e.g. https://animal-api-xxxx.onrender.com)",
+            "Configure Backend (Optional):\n\n• Leave blank to use 100% Free In-Browser AI (recommended)\n• Or paste your custom cloud URL (e.g. https://animal-api.onrender.com):",
             current
         );
-        if (newUrl !== null && newUrl.trim() !== '') {
-            localStorage.setItem('animal_backend_url', newUrl.trim());
+        if (newUrl !== null) {
+            if (newUrl.trim() === '') {
+                localStorage.removeItem('animal_backend_url');
+                alert("Switched to 100% Free In-Browser AI engine!");
+            } else {
+                localStorage.setItem('animal_backend_url', newUrl.trim());
+                alert(`Backend set to: ${newUrl.trim()}`);
+            }
             updateApiIndicator();
-            alert(`Backend URL set to: ${newUrl.trim()}`);
         }
     });
 }
 updateApiIndicator();
+
+async function getOrInitOrtSession() {
+    if (ortSession) return ortSession;
+    statusMessage.textContent = "Loading AI vision engine in your browser (first time only ~41MB)...";
+    if (typeof ort !== 'undefined') {
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.simd = true;
+        ortSession = await ort.InferenceSession.create('animal_model.onnx', {
+            executionProviders: ['wasm']
+        });
+        return ortSession;
+    }
+    throw new Error("ONNX Runtime Web library could not be loaded.");
+}
+
+async function predictInBrowser(file) {
+    statusMessage.textContent = "Preparing image...";
+    await loadStaticData();
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    await new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = url;
+    });
+
+    const session = await getOrInitOrtSession();
+    statusMessage.textContent = "Analyzing animal features with EfficientNetB3...";
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 300;
+    canvas.height = 300;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, 300, 300);
+    URL.revokeObjectURL(url);
+
+    const imgData = ctx.getImageData(0, 0, 300, 300).data;
+    const floatArray = new Float32Array(1 * 300 * 300 * 3);
+
+    for (let i = 0, j = 0; i < imgData.length; i += 4, j += 3) {
+        floatArray[j] = imgData[i];
+        floatArray[j + 1] = imgData[i + 1];
+        floatArray[j + 2] = imgData[i + 2];
+    }
+
+    const inputTensor = new ort.Tensor('float32', floatArray, [1, 300, 300, 3]);
+    const outputMap = await session.run({ input: inputTensor });
+    const outputTensor = outputMap.dense || Object.values(outputMap)[0];
+    const probs = Array.from(outputTensor.data);
+
+    const indexed = probs.map((val, idx) => ({ val, idx }));
+    indexed.sort((a, b) => b.val - a.val);
+
+    const best = indexed[0];
+    const rawName = (classesCache && classesCache[best.idx]) || `Class ${best.idx}`;
+    const bestName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    const confidencePct = Math.round(best.val * 10000) / 100;
+
+    let tier = "Low Confidence";
+    let tierMsg = `Low confidence prediction. Best guess: ${bestName}.`;
+    if (confidencePct >= 80) {
+        tier = "High Confidence";
+        tierMsg = `Strong match! Identified as ${bestName} with high certainty.`;
+    } else if (confidencePct >= 50) {
+        tier = "Medium Confidence";
+        tierMsg = `Moderate match. Likely a ${bestName}.`;
+    }
+
+    const top5 = indexed.slice(0, 5).map((item, r) => {
+        const name = (classesCache && classesCache[item.idx]) || `Class ${item.idx}`;
+        return {
+            rank: r + 1,
+            animal: name.charAt(0).toUpperCase() + name.slice(1),
+            confidence: Math.round(item.val * 10000) / 100
+        };
+    });
+
+    const key = rawName.toLowerCase();
+    const info = (animalInfoCache && animalInfoCache[key]) || {
+        scientific_name: bestName,
+        diet: "Unknown",
+        habitat: "Wild",
+        status: "Least Concern",
+        lifespan: "Unknown",
+        summary: `${bestName} is a wonderful creature recognized by our AI vision model.`,
+        fun_fact: `Animals of type ${bestName} play an essential role in their natural ecosystem.`,
+        speech: `This is a ${bestName}. Our AI vision model has detected this species with a confidence score of ${confidencePct} percent.`
+    };
+
+    return {
+        success: true,
+        animal: bestName,
+        predicted_animal: key,
+        confidence: confidencePct,
+        confidence_formatted: `${confidencePct}%`,
+        confidence_level: tier,
+        tier: tier,
+        tier_message: tierMsg,
+        top_5: top5,
+        info: info
+    };
+}
 
 async function uploadAndPredict(file) {
     stopSpeaking();
@@ -182,48 +289,38 @@ async function uploadAndPredict(file) {
     resultsCard.classList.add('hidden');
     statusMessage.textContent = "Analyzing image features with EfficientNetB3...";
 
-    const formData = new FormData();
-    formData.append('file', file);
-    const endpoint = getApiEndpoint();
+    const customUrl = localStorage.getItem('animal_backend_url');
+    if (customUrl) {
+        const endpoint = customUrl.replace(/\/+$/, '') + '/predict';
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const headers = {};
+            if (endpoint.includes('loca.lt')) headers['bypass-tunnel-reminder'] = 'true';
 
-    if (!endpoint) {
-        loadingStatus.classList.remove('hidden');
-        statusMessage.innerHTML = `⚠️ <b>Backend URL needed:</b><br><br>` +
-            `Click the <b>⚙️ Backend</b> button in the top right corner and paste your Render URL (from your Render dashboard, ending with <code>.onrender.com</code>).`;
-        return;
-    }
-
-    const headers = {};
-    if (endpoint.includes('loca.lt')) {
-        headers['bypass-tunnel-reminder'] = 'true';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                body: formData,
+                headers: headers
+            });
+            if (response.ok) {
+                const data = await response.json();
+                loadingStatus.classList.add('hidden');
+                renderResults(data);
+                return;
+            }
+        } catch (e) {
+            console.warn("Custom backend error, using in-browser AI:", e);
+        }
     }
 
     try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            body: formData,
-            headers: headers
-        });
-
-        if (!response.ok) {
-            throw new Error(`Server returned error status ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await predictInBrowser(file);
         loadingStatus.classList.add('hidden');
         renderResults(data);
     } catch (err) {
         loadingStatus.classList.remove('hidden');
-        if (window.location.protocol === 'https:' && (endpoint.startsWith('http://localhost') || endpoint.startsWith('http://127.0.0.1'))) {
-            statusMessage.innerHTML = `⚠️ <b>Browser Mixed-Content Block:</b><br><br>` +
-                `This site is loaded over secure <b>HTTPS</b>, so browsers strictly block direct calls to insecure <b>HTTP (localhost)</b>.<br><br>` +
-                `👉 <b>Option 1 (Instant & Recommended):</b> Open <a href="http://localhost:8000" style="color:#60a5fa; text-decoration:underline; font-weight:bold;">http://localhost:8000</a> in your browser tab. The full web app runs locally on the same origin with zero errors.<br><br>` +
-                `👉 <b>Option 2:</b> Click the <b>⚙️ Backend</b> button in the top right and enter your secure HTTPS tunnel URL.`;
-        } else if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
-            statusMessage.innerHTML = `⚠️ Cannot reach backend at <b>${endpoint}</b>.<br><br>• Make sure <code>python server.py</code> is running on your machine.<br>• Or click the <b>⚙️ Backend</b> button in the top right to configure your URL.`;
-        } else {
-            statusMessage.textContent = `❌ Error: ${err.message}`;
-        }
+        statusMessage.textContent = `❌ Prediction error: ${err.message}`;
         console.error(err);
     }
 }

@@ -25,3 +25,4 @@ Thumbs.db
 .vscode/
 .idea/
 deploy_to_hf.py
+cloudflared.exe

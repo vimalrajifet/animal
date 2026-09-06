@@ -117,12 +117,12 @@ function handleImageFile(file) {
     uploadAndPredict(file);
 }
 
-const DEFAULT_CLOUD_BACKEND = 'https://belongs-visits-simulation-builders.trycloudflare.com';
+const DEFAULT_CLOUD_BACKEND = '';
 
 function getApiEndpoint() {
     let custom = localStorage.getItem('animal_backend_url');
-    // If on HTTPS (e.g. Vercel), automatically clear stale insecure http:// localhost URLs
-    if (window.location.protocol === 'https:' && custom && custom.startsWith('http://')) {
+    // If on HTTPS (e.g. Vercel), automatically clear stale dead tunnels or localhost
+    if (window.location.protocol === 'https:' && custom && (custom.startsWith('http://') || custom.includes('trycloudflare.com') || custom.includes('loca.lt'))) {
         localStorage.removeItem('animal_backend_url');
         custom = null;
     }
@@ -132,14 +132,14 @@ function getApiEndpoint() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '/predict';
     }
-    return DEFAULT_CLOUD_BACKEND + '/predict';
+    return '';
 }
 
 function updateApiIndicator() {
     const indicator = document.getElementById('apiIndicatorText');
     if (indicator) {
         let custom = localStorage.getItem('animal_backend_url');
-        if (window.location.protocol === 'https:' && custom && custom.startsWith('http://')) {
+        if (window.location.protocol === 'https:' && custom && (custom.startsWith('http://') || custom.includes('trycloudflare.com') || custom.includes('loca.lt'))) {
             localStorage.removeItem('animal_backend_url');
             custom = null;
         }
@@ -154,12 +154,7 @@ function updateApiIndicator() {
         } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             indicator.textContent = 'Backend: localhost:8000';
         } else {
-            try {
-                const url = new URL(DEFAULT_CLOUD_BACKEND);
-                indicator.textContent = `Backend: ${url.host}`;
-            } catch (e) {
-                indicator.textContent = `Backend: ${DEFAULT_CLOUD_BACKEND}`;
-            }
+            indicator.textContent = '⚙️ Set Backend URL';
         }
     }
 }
@@ -167,9 +162,9 @@ function updateApiIndicator() {
 const apiConfigBtn = document.getElementById('apiConfigBtn');
 if (apiConfigBtn) {
     apiConfigBtn.addEventListener('click', () => {
-        const current = localStorage.getItem('animal_backend_url') || 'http://localhost:8000';
+        const current = localStorage.getItem('animal_backend_url') || '';
         const newUrl = prompt(
-            "Configure FastAPI Backend URL:\n\n• If running locally: http://localhost:8000\n• If using ngrok/tunnel or cloud (Render/HuggingFace): https://your-backend-url",
+            "Configure FastAPI Backend URL:\n\nPaste your Render URL here:\n(e.g. https://animal-api-xxxx.onrender.com)",
             current
         );
         if (newUrl !== null && newUrl.trim() !== '') {
@@ -190,6 +185,13 @@ async function uploadAndPredict(file) {
     const formData = new FormData();
     formData.append('file', file);
     const endpoint = getApiEndpoint();
+
+    if (!endpoint) {
+        loadingStatus.classList.remove('hidden');
+        statusMessage.innerHTML = `⚠️ <b>Backend URL needed:</b><br><br>` +
+            `Click the <b>⚙️ Backend</b> button in the top right corner and paste your Render URL (from your Render dashboard, ending with <code>.onrender.com</code>).`;
+        return;
+    }
 
     const headers = {};
     if (endpoint.includes('loca.lt')) {

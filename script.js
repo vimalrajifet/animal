@@ -117,10 +117,16 @@ function handleImageFile(file) {
     uploadAndPredict(file);
 }
 
-const DEFAULT_CLOUD_BACKEND = 'https://animal-vision-vimal.loca.lt';
+const DEFAULT_CLOUD_BACKEND = 'https://belongs-visits-simulation-builders.trycloudflare.com';
 
 function getApiEndpoint() {
-    const custom = localStorage.getItem('animal_backend_url');
+    let custom = localStorage.getItem('animal_backend_url');
+    // If on HTTPS (e.g. Vercel), automatically clear stale insecure http:// localhost URLs
+    if (window.location.protocol === 'https:' && custom && custom.startsWith('http://')) {
+        localStorage.removeItem('animal_backend_url');
+        custom = null;
+    }
+
     if (custom) return custom.replace(/\/+$/, '') + '/predict';
 
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -132,7 +138,12 @@ function getApiEndpoint() {
 function updateApiIndicator() {
     const indicator = document.getElementById('apiIndicatorText');
     if (indicator) {
-        const custom = localStorage.getItem('animal_backend_url');
+        let custom = localStorage.getItem('animal_backend_url');
+        if (window.location.protocol === 'https:' && custom && custom.startsWith('http://')) {
+            localStorage.removeItem('animal_backend_url');
+            custom = null;
+        }
+
         if (custom) {
             try {
                 const url = new URL(custom);

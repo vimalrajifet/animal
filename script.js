@@ -117,6 +117,8 @@ function handleImageFile(file) {
     uploadAndPredict(file);
 }
 
+const DEFAULT_CLOUD_BACKEND = 'https://animal-vision-vimal.loca.lt';
+
 function getApiEndpoint() {
     const custom = localStorage.getItem('animal_backend_url');
     if (custom) return custom.replace(/\/+$/, '') + '/predict';
@@ -124,7 +126,7 @@ function getApiEndpoint() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return '/predict';
     }
-    return 'http://localhost:8000/predict';
+    return DEFAULT_CLOUD_BACKEND + '/predict';
 }
 
 function updateApiIndicator() {
@@ -141,7 +143,12 @@ function updateApiIndicator() {
         } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             indicator.textContent = 'Backend: localhost:8000';
         } else {
-            indicator.textContent = 'Backend: localhost:8000';
+            try {
+                const url = new URL(DEFAULT_CLOUD_BACKEND);
+                indicator.textContent = `Backend: ${url.host}`;
+            } catch (e) {
+                indicator.textContent = `Backend: ${DEFAULT_CLOUD_BACKEND}`;
+            }
         }
     }
 }

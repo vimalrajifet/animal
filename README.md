@@ -1,3 +1,13 @@
+---
+title: Animal Vision And Speech API
+emoji: 🦁
+colorFrom: yellow
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🐾 90-Class Animal Classification with EfficientNetB3
 
 A complete end-to-end Deep Learning vision pipeline trained on the 90-class animal dataset located in `archive/animals/animals`.

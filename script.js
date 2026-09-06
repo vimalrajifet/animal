@@ -173,10 +173,16 @@ async function uploadAndPredict(file) {
     formData.append('file', file);
     const endpoint = getApiEndpoint();
 
+    const headers = {};
+    if (endpoint.includes('loca.lt')) {
+        headers['bypass-tunnel-reminder'] = 'true';
+    }
+
     try {
         const response = await fetch(endpoint, {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: headers
         });
 
         if (!response.ok) {
@@ -188,7 +194,12 @@ async function uploadAndPredict(file) {
         renderResults(data);
     } catch (err) {
         loadingStatus.classList.remove('hidden');
-        if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+        if (window.location.protocol === 'https:' && (endpoint.startsWith('http://localhost') || endpoint.startsWith('http://127.0.0.1'))) {
+            statusMessage.innerHTML = `⚠️ <b>Browser Mixed-Content Block:</b><br><br>` +
+                `This site is loaded over secure <b>HTTPS</b>, so browsers strictly block direct calls to insecure <b>HTTP (localhost)</b>.<br><br>` +
+                `👉 <b>Option 1 (Instant & Recommended):</b> Open <a href="http://localhost:8000" style="color:#60a5fa; text-decoration:underline; font-weight:bold;">http://localhost:8000</a> in your browser tab. The full web app runs locally on the same origin with zero errors.<br><br>` +
+                `👉 <b>Option 2:</b> Click the <b>⚙️ Backend</b> button in the top right and enter your secure HTTPS tunnel URL.`;
+        } else if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
             statusMessage.innerHTML = `⚠️ Cannot reach backend at <b>${endpoint}</b>.<br><br>• Make sure <code>python server.py</code> is running on your machine.<br>• Or click the <b>⚙️ Backend</b> button in the top right to configure your URL.`;
         } else {
             statusMessage.textContent = `❌ Error: ${err.message}`;

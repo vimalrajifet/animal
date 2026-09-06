@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY best_animal_model.keras ./animal_model.keras
+COPY best_animal_model.keras ./best_animal_model.keras
 COPY classes.json .
 COPY animal_data.py .
 COPY server.py .
